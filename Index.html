@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Aimlock Simulator</title>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;
+  overflow:hidden;
+  background:#080b12;
+  font-family:Arial,sans-serif;
+  color:white;
+}
+canvas{display:block}
+
+#panel{
+  position:fixed;
+  top:15px;
+  left:15px;
+  width:230px;
+  padding:15px;
+  border:1px solid #35e6ff;
+  border-radius:14px;
+  background:rgba(5,12,22,.85);
+  box-shadow:0 0 20px #00cfff55;
+  backdrop-filter:blur(8px);
+}
+
+h2{
+  margin:0 0 12px;
+  color:#35e6ff;
+  font-size:18px;
+}
+
+.row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin:10px 0;
+}
+
+button{
+  width:100%;
+  padding:10px;
+  border:0;
+  border-radius:9px;
+  background:#13bfe5;
+  color:#001018;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+button.active{
+  background:#ff3b6b;
+  color:white;
+}
+
+#status{
+  margin-top:10px;
+  font-size:13px;
+  color:#8ff7ff;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="panel">
+  <h2>🎯 AIMLOCK SIMULATOR</h2>
+
+  <div class="row">
+    <span>Aimlock</span>
+    <input id="aim" type="checkbox">
+  </div>
+
+  <div class="row">
+    <span>FOV</span>
+    <input id="fov" type="range" min="60" max="300" value="160">
+  </div>
+
+  <button id="spawn">Spawn mục tiêu</button>
+
+  <div id="status">Aimlock: OFF</div>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let W, H;
+let targets = [];
+let aimlock = false;
+let fov = 160;
+
+function resize(){
+  W = canvas.width = innerWidth;
+  H = canvas.height = innerHeight;
+}
+addEventListener("resize", resize);
+resize();
+
+const player = {
+  x: W/2,
+  y: H/2
+};
+
+function spawnTarget(){
+  targets.push({
+    x: Math.random() * (W-100)+50,
+    y: Math.random() * (H-100)+50,
+    r: 18,
+    vx: (Math.random()-.5)*2,
+    vy: (Math.random()-.5)*2,
+    hue: Math.random()*360
+  });
+}
+
+for(let i=0;i<7;i++) spawnTarget();
+
+function distance(a,b){
+  return Math.hypot(a.x-b.x,a.y-b.y);
+}
+
+function getTarget(){
+  let best = null;
+  let bestDist = Infinity;
+
+  for(const t of targets){
+    const d = distance(player,t);
+
+    if(d <= fov && d < bestDist){
+      best = t;
+      bestDist = d;
+    }
+  }
+
+  return best;
+}
+
+function update(){
+  for(const t of targets){
+    t.x += t.vx;
+    t.y += t.vy;
+
+    if(t.x < 25 || t.x > W-25) t.vx *= -1;
+    if(t.y < 25 || t.y > H-25) t.vy *= -1;
+  }
+
+  if(aimlock){
+    const target = getTarget();
+
+    if(target){
+      // Mô phỏng camera/tâm ngắm tự khóa mục tiêu
+      player.x += (target.x-player.x)*0.12;
+      player.y += (target.y-player.y)*0.12;
+    }
+  }
+}
+
+function drawGrid(){
+  ctx.strokeStyle = "rgba(50,200,255,.07)";
+  ctx.lineWidth = 1;
+
+  for(let x=0;x<W;x+=40){
+    ctx.beginPath();
+    ctx.moveTo(x,0);
+    ctx.lineTo(x,H);
+    ctx.stroke();
+  }
+
+  for(let y=0;y<H;y+=40){
+    ctx.beginPath();
+    ctx.moveTo(0,y);
+    ctx.lineTo(W,y);
+    ctx.stroke();
+  }
+}
+
+function drawFOV(){
+  ctx.beginPath();
+  ctx.arc(player.x,player.y,fov,0,Math.PI*2);
+  ctx.strokeStyle = "rgba(0,230,255,.45)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function drawPlayer(){
+  ctx.beginPath();
+  ctx.arc(player.x,player.y,7,0,Math.PI*2);
+  ctx.fillStyle = "#35e6ff";
+  ctx.shadowBlur = 20;
+  ctx.shadowColor = "#00d9ff";
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function drawTargets(){
+  const locked = aimlock ? getTarget() : null;
+
+  for(const t of targets){
+    ctx.beginPath();
+    ctx.arc(t.x,t.y,t.r,0,Math.PI*2);
+
+    ctx.fillStyle = `hsl(${t.hue},80%,55%)`;
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    if(t === locked){
+      ctx.beginPath();
+      ctx.arc(t.x,t.y,t.r+10,0,Math.PI*2);
+      ctx.strokeStyle = "#ff315f";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(player.x,player.y);
+      ctx.lineTo(t.x,t.y);
+      ctx.strokeStyle = "#ff315f";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = "#ff6688";
+      ctx.font = "bold 13px Arial";
+      ctx.fillText("LOCKED",t.x-27,t.y-30);
+    }
+  }
+}
+
+function loop(){
+  ctx.clearRect(0,0,W,H);
+
+  drawGrid();
+  drawFOV();
+  drawTargets();
+  drawPlayer();
+
+  update();
+  requestAnimationFrame(loop);
+}
+
+document.getElementById("aim").onchange = e => {
+  aimlock = e.target.checked;
+
+  document.getElementById("status").textContent =
+    "Aimlock: " + (aimlock ? "ON" : "OFF");
+};
+
+document.getElementById("fov").oninput = e => {
+  fov = Number(e.target.value);
+};
+
+document.getElementById("spawn").onclick = spawnTarget;
+
+loop();
+</script>
+
+</body>
+</html>
